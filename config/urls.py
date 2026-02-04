@@ -19,7 +19,7 @@ from django.urls import path
 # Импортируем нашу функцию из приложения gallery
 from gallery.views import home
 urlpatterns = [
-path('admin/', admin.site.urls),
+path('admin/', admin.site.urls, 'about/'),
 # Пустая строка '' означает главную страницу сайта (http://localhost:8000/)
-path('', home, name='home'),
+path('', home, name='home', about, name="about"),
 ]

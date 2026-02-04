@@ -9,6 +9,7 @@
         <!-- {{ ... }} — это переменная. Мы передадим её из Python -->
         <h1>{{ page_title }}</h1>
     </header>
+    
     <main>
         <p>Добро пожаловать в систему хранения.</p>
         <hr>
@@ -18,9 +19,29 @@
         {% else %}
         <p>База пуста. Загрузите что-нибудь!</p>
         {% endif %}
+
+
+        <h2>Доступные ассеты:</h2>
+    <!-- Цикл for в шаблоне Django -->
+    <ul>
+        {% for asset in assets %}
+        <li>
+            <strong>{{ asset.name }}</strong>
+            <small>(Размер: {{ asset.file_size }})</small>
+            <!-- Ссылка-заглушка -->
+            <a href="#">[Скачать]</a>
+        </li>
+        {% empty %}
+        <!-- Этот блок сработает, если список assets пустой -->
+        <li>Нет доступных моделей.</li>
+        {% endfor %}
+    </ul>
+
+
     </main>
     <footer>
-        <p>&copy; 2024 Web Structures Course</p>
+        <p>&copy; 2026 Web Structures Course</p>
     </footer>
 </body>
 </html>
+
