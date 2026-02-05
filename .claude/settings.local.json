@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(powershell.exe:*)",
+      "Bash(cmd.exe /c \"where python 2>nul\")"
+    ]
+  }
+}
