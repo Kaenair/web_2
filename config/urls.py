@@ -17,7 +17,7 @@ Including another URLconf
 from django.contrib import admin
 from django.urls import path
 # Импортируем нашу функцию из приложения gallery
-from gallery.views import home, about
+from gallery.views import home, about, upload
 
 from django.conf import settings
 from django.conf.urls.static import static
@@ -28,6 +28,7 @@ urlpatterns = [
     path('', home, name='home'),
 
     path('about/', about, name='about'),
+    path('upload/', upload, name='upload'),
 
 ]
 

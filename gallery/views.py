@@ -6,15 +6,11 @@ from django.http import HttpResponse
 
 def home(request):
 
-    context_data = {
-    'page_title': 'Главная Галерея',
-    'models_count': 5, 
-    }
-
     assets = Asset.objects.all().order_by('-created_at')
     context_data = {
         'page_title': 'Главная Галерея',
         'assets': assets,
+        'models_count': assets.count(),
     }
     return render(request, 'gallery/index.html', context_data)
 
@@ -25,3 +21,8 @@ def about(request):
 
     return render(request, 'gallery/about.html', context_data)
 
+def upload(request):
+    context_data = {
+        'page_title': 'Загрузка модели'
+    }
+    return render(request, 'gallery/upload.html', context_data)
