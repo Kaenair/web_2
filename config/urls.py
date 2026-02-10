@@ -18,6 +18,10 @@ from django.contrib import admin
 from django.urls import path
 # Импортируем нашу функцию из приложения gallery
 from gallery.views import home, about
+
+from django.conf import settings
+from django.conf.urls.static import static
+
 urlpatterns = [
     path('admin/', admin.site.urls),
     # Пустая строка '' означает главную страницу сайта (http://localhost:8000/)
@@ -26,3 +30,6 @@ urlpatterns = [
     path('about/', about, name='about'),
 
 ]
+
+if settings.DEBUG:
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
