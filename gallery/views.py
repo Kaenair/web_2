@@ -1,8 +1,10 @@
 from django.shortcuts import render
 from .models import Asset
+from .forms import AssetForm 
 
 # Create your views here.
 from django.http import HttpResponse
+from django.shortcuts import redirect
 
 def home(request):
 
@@ -22,7 +24,17 @@ def about(request):
     return render(request, 'gallery/about.html', context_data)
 
 def upload(request):
-    context_data = {
-        'page_title': 'Загрузка модели'
-    }
-    return render(request, 'gallery/upload.html', context_data)
+    if request.method == 'POST':
+        # Сценарий: Пользователь нажал "Отправить"
+        # ВАЖНО: Передаем request.FILES, иначе файл потеряется!
+        form = AssetForm(request.POST, request.FILES)
+        if form.is_valid():
+            # Если все поля заполнены верно - сохраняем в БД
+            form.save()
+            # И перекидываем пользователя на главную
+            return redirect('home')
+    else:
+        # Сценарий: Пользователь просто зашел на страницу (GET)
+        form = AssetForm()  # Создаем пустую форму
+    # Отдаем шаблон, передавая туда форму (заполненную ошибками или пустую)
+    return render(request, 'gallery/upload.html', {'form': form})

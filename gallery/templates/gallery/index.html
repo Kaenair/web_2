@@ -1,8 +1,20 @@
 <!DOCTYPE html>
+{% load static %}
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
     <title>3D Storage</title>
+    <!-- ВАЖНО: Это карта, указывающая браузеру, где брать библиотеки -->
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+            "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+        }
+    }
+    </script>
+
+    <link rel="stylesheet" href="{% static 'gallery/style.css' %}">
 </head>
 <body>
     <header>
@@ -12,48 +24,84 @@
             <a href="/about/">О нас</a>
         </nav>
     </header>
-    
+
     <main>
         <p>Добро пожаловать в систему хранения.</p>
         <hr>
         <!-- Проверка условия -->
         {% if models_count > 0 %}
-        <p>Сейчас в базе: <b>{{ models_count }}</b> моделей.</p>
+            <p>Сейчас в базе: <b>{{ models_count }}</b> моделей.</p>
         {% else %}
-        <p>База пуста. Загрузите что-нибудь!</p>
+            <p>База пуста. Загрузите что-нибудь!</p>
         {% endif %}
 
+        <!-- контейнер сетки -->
+        <div class="gallery-grid">
 
-        <h2>Доступные ассеты:</h2>
+            {% for asset in assets %}
+            <!-- карточка -->
+            <div class="asset-card">
 
-    <!-- Цикл for в шаблоне Django -->
-    <ul>
-        {% for asset in assets %}
-        <li>
-            <strong>{{ asset.title }}</strong>
-            <small>(Размер: {{ asset.file_size }})</small>
-            <small>(Размер: {{ asset.file.size|filesizeformat }})</small>
+                <!-- 1. Превью (Верхняя часть) -->
+                <div class="card-preview"
+                     id="model-container-{{ asset.id }}"
+                     data-url="{{ asset.file.url }}">
+                    🎲
+                </div>
 
-            <a href="{{ asset.file.url }}" download>[Скачать файл]</a>
+                <!-- 2. Информация (Нижняя часть) -->
+                <div class="card-info">
+                    <h3 class="card-title">{{ asset.title }}</h3>
 
-        </li>
-        {% empty %}
-        <!-- Этот блок сработает, если список assets пустой -->
-        <li>Нет доступных моделей.</li>
-        {% endfor %}
-    </ul>
+                    <div class="card-meta">
+                        <span>📅 {{ asset.created_at|date:"d M Y" }}</span>
+                        {% if asset.file %}
+                            <span style="float: right;">📦 {{ asset.file.size|filesizeformat }}</span>
+                        {% endif %}
+                    </div>
 
-    <hr>
-    <div>
-        <a href="{% url 'upload' %}">
-            <button>Загрузить новую модель</button>
-        </a>
-    </div>
+                    <!-- Кнопка скачивания -->
+                    {% if asset.file %}
+                        <a href="{{ asset.file.url }}" class="btn" download>Скачать</a>
+                    {% else %}
+                        <span style="color: red;">Файл потерян</span>
+                    {% endif %}
+                </div>
+            </div>
+            {% empty %}
+            <p>База пуста.</p>
+            {% endfor %}
+
+        </div>
+
+        <hr>
+        <div>
+            <a href="{% url 'upload' %}">
+                <button>Загрузить новую модель</button>
+            </a>
+        </div>
 
     </main>
     <footer>
         <p>&copy; 2026 Web Structures Course</p>
     </footer>
+
+    <script type="module">
+        import { loadModel } from "{% static 'gallery/js/viewer.js' %}";
+
+        // Находим все карточки с моделями
+        const containers = document.querySelectorAll('.card-preview');
+
+        // Пробегаемся по каждой
+        containers.forEach(container => {
+            const id = container.id;              // Например: "model-container-5"
+            const url = container.dataset.url;    // Например: "/media/3d_assets/chair.glb"
+
+            // Если URL есть (файл существует) - запускаем viewer
+            if (url) {
+                loadModel(id, url);
+            }
+        });
+    </script>
 </body>
 </html>
-
