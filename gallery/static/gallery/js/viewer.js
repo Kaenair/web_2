@@ -3,6 +3,11 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 // Подключаем "грузчика" для формата FBX
 import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
+// Подключаем "грузчика" для формата OBJ
+import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
+// НОВЫЙ ИМПОРТ: Контроллер орбиты
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 
 export function mountSimpleCube(containerId) {
     const container = document.getElementById(containerId);
@@ -79,24 +84,54 @@ export function loadModel(containerId, modelUrl) {
 
     // 1. Стандартная настройка сцены
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0xf5f5f5); // Цвет фона под карточку
+    // Фон прозрачный (убираем scene.background, чтобы alpha работал)
 
     const camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 1000);
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.setSize(container.clientWidth, container.clientHeight);
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.0;
 
     // Очищаем контейнер от текста "Wait..." и вставляем Canvas
     container.innerHTML = '';
     container.appendChild(renderer.domElement);
 
-    // 2. Свет (ВАЖНО! Без него модель будет черной)
-    const ambientLight = new THREE.AmbientLight(0xffffff, 1); // Мягкий свет
-    scene.add(ambientLight);
+    // --- ДОБАВЛЯЕМ УПРАВЛЕНИЕ ---
+    const controls = new OrbitControls(camera, renderer.domElement);
 
-    const dirLight = new THREE.DirectionalLight(0xffffff, 2); // Солнце
+    // Включаем инерцию (damping), чтобы вращение было плавным, как в Sketchfab
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.05;
+
+    // Ограничиваем зум (чтобы не улететь сквозь модель)
+    controls.minDistance = 0.1;
+    controls.maxDistance = 50;
+
+    // 2. Свет через PMREMGenerator + RoomEnvironment
+    // PMREMGenerator генерирует карту окружения из сцены
+    const pmremGenerator = new THREE.PMREMGenerator(renderer);
+    pmremGenerator.compileEquirectangularShader();
+
+    // Создаем нейтральную "комнату"
+    const roomEnvironment = new RoomEnvironment();
+
+    // Говорим сцене: "Используй эту комнату как источник света и отражений"
+    scene.environment = pmremGenerator.fromScene(roomEnvironment).texture;
+
+    // Прямые источники света — для материалов, не поддерживающих environment map
+    // (MeshPhongMaterial, MeshLambertMaterial из FBX/OBJ)
+    const dirLight = new THREE.DirectionalLight(0xffffff, 1.5);
     dirLight.position.set(5, 10, 7);
     scene.add(dirLight);
+
+    const dirLight2 = new THREE.DirectionalLight(0xffffff, 0.8);
+    dirLight2.position.set(-5, 5, -5);
+    scene.add(dirLight2);
+
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+    scene.add(ambientLight);
 
     // 3. Определяем формат файла и выбираем загрузчик
     const extension = modelUrl.split('.').pop().toLowerCase();
@@ -106,64 +141,96 @@ export function loadModel(containerId, modelUrl) {
         loader = new GLTFLoader();
     } else if (extension === 'fbx') {
         loader = new FBXLoader();
+    } else if (extension === 'obj') {
+        loader = new OBJLoader();
     } else {
         console.error("Неподдерживаемый формат:", extension);
         return;
     }
 
     // Магия центровки — подгоняем камеру под размер модели
-    function fitCameraToObject(camera, object, offset = 1.25) {
-        // 1. Вычисляем Bounding Box (коробку, в которую влезает модель)
-        const boundingBox = new THREE.Box3();
-        boundingBox.setFromObject(object);
-
-        // 2. Находим центр этой коробки и её размер
+    function fitCameraToObject(camera, object, controls) {
+        // 1. Вычисляем Bounding Box
+        const boundingBox = new THREE.Box3().setFromObject(object);
         const center = boundingBox.getCenter(new THREE.Vector3());
         const size = boundingBox.getSize(new THREE.Vector3());
 
-        // 3. Самая длинная сторона модели (чтобы точно влезла)
-        const maxDim = Math.max(size.x, size.y, size.z);
-
-        // 4. Смещаем саму модель так, чтобы её центр стал в 0,0,0
-        // Вместо того чтобы двигать камеру за моделью, проще притянуть модель к центру мира
-        object.position.x = -center.x;
-        object.position.y = -center.y; // Теперь модель стоит на "полу" центра
-        object.position.z = -center.z;
-
-        // 5. Отодвигаем камеру назад
-        // Немного тригонометрии: вычисляем дистанцию в зависимости от угла обзора (FOV)
+        // 2. Считаем нужную дистанцию по вертикали и горизонтали
         const fov = camera.fov * (Math.PI / 180);
-        let cameraZ = Math.abs(maxDim / 2 / Math.tan(fov / 2));
+        const aspect = camera.aspect;
 
-        // Умножаем на коэффициент (offset), чтобы модель не упиралась в края экрана
-        cameraZ *= offset;
+        // Дистанция, чтобы модель влезла по высоте
+        const distV = (size.y / 2) / Math.tan(fov / 2);
+        // Дистанция, чтобы модель влезла по ширине (учитываем aspect ratio)
+        const distH = (size.x / 2) / Math.tan(fov / 2) / aspect;
+        // Берём максимум + учитываем глубину модели
+        let distance = Math.max(distV, distH, size.z);
 
-        // Устанавливаем камеру
-        camera.position.set(0, maxDim * 0.5, cameraZ); // Чуть выше центра
+        // 3. Отступ — модель не должна упираться в края (×2.0)
+        distance *= 2.0;
 
-        // Камера должна смотреть в центр мира (где теперь стоит модель)
-        camera.lookAt(0, 0, 0);
+        // 4. Ставим камеру: прямо перед моделью, чуть выше центра
+        camera.position.set(
+            center.x,
+            center.y + size.y * 0.15,
+            center.z + distance
+        );
 
-        // Динамически подстраиваем near/far под размер модели
-        camera.near = cameraZ / 100;
-        camera.far = cameraZ * 10;
-
-        // Обновляем параметры камеры
+        // 5. near/far подстраиваем под размер
+        camera.near = distance / 100;
+        camera.far = distance * 20;
         camera.updateProjectionMatrix();
+
+        // 6. OrbitControls вращает вокруг центра модели
+        controls.target.copy(center);
+        controls.minDistance = distance * 0.3;
+        controls.maxDistance = distance * 5;
+        controls.update();
     }
 
     // 4. Загрузка модели
+    let loadedModel = null; // Создайте переменную для хранения ссылки на модель
+
     loader.load(
         modelUrl, // URL, который пришел из Django
         (result) => {
             // --- SUCCESS ---
             // GLTFLoader возвращает объект с полем scene, FBXLoader — сразу группу
-            const model = result.scene ? result.scene : result;
+            loadedModel = result.scene ? result.scene : result;
 
-            // Центровка камеры (Шаг 2)
-            fitCameraToObject(camera, model, 1.5);
+            // Обрабатываем материалы, чтобы модель корректно отражала свет
+            loadedModel.traverse((child) => {
+                if (!child.isMesh || !child.material) return;
 
-            scene.add(model);
+                const mats = Array.isArray(child.material) ? child.material : [child.material];
+                const newMats = mats.map((mat) => {
+                    // Phong/Lambert не поддерживают environment map —
+                    // конвертируем в Standard для корректного PBR-освещения
+                    if (mat.isMeshPhongMaterial || mat.isMeshLambertMaterial) {
+                        const stdMat = new THREE.MeshStandardMaterial({
+                            color: mat.color,
+                            map: mat.map || null,
+                            roughness: 0.6,
+                            metalness: 0.2,
+                            envMap: scene.environment,
+                        });
+                        mat.dispose();
+                        return stdMat;
+                    }
+                    // Standard/Physical — просто назначаем envMap
+                    if (mat.isMeshStandardMaterial || mat.isMeshPhysicalMaterial) {
+                        mat.envMap = scene.environment;
+                        mat.needsUpdate = true;
+                    }
+                    return mat;
+                });
+                child.material = newMats.length === 1 ? newMats[0] : newMats;
+            });
+
+            // Центровка камеры
+            fitCameraToObject(camera, loadedModel, controls);
+
+            scene.add(loadedModel);
         },
         undefined, // Progress (можно пропустить)
         (error) => {
@@ -183,6 +250,15 @@ export function loadModel(containerId, modelUrl) {
     // 6. Анимация
     function animate() {
         requestAnimationFrame(animate);
+
+        // ОБЯЗАТЕЛЬНО: Обновляем контроллер в каждом кадре
+        controls.update();
+
+        // Авто-вращение можно убрать или оставить по желанию.
+        // Если оставить, оно будет конфликтовать с мышкой.
+        // Давайте пока закомментируем авто-вращение:
+        // if (loadedModel) loadedModel.rotation.y += 0.005;
+
         renderer.render(scene, camera);
     }
     animate();
