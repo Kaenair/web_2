@@ -7,8 +7,16 @@ from django.http import HttpResponse
 from django.shortcuts import redirect
 
 def home(request):
-
+    import os
     assets = Asset.objects.all().order_by('-created_at')
+
+    # Добавляем безопасный размер файла — None если файл не существует на диске
+    for asset in assets:
+        try:
+            asset.file_size = asset.file.size if asset.file and os.path.exists(asset.file.path) else None
+        except Exception:
+            asset.file_size = None
+
     context_data = {
         'page_title': 'Главная Галерея',
         'assets': assets,

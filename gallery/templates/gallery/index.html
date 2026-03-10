@@ -55,8 +55,8 @@
 
                     <div class="card-meta">
                         <span>📅 {{ asset.created_at|date:"d M Y" }}</span>
-                        {% if asset.file %}
-                            <span style="float: right;">📦 {{ asset.file.size|filesizeformat }}</span>
+                        {% if asset.file_size %}
+                            <span style="float: right;">📦 {{ asset.file_size|filesizeformat }}</span>
                         {% endif %}
                     </div>
 

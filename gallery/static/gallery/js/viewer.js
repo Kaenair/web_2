@@ -94,9 +94,23 @@ export function loadModel(containerId, modelUrl) {
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.0;
 
-    // Очищаем контейнер от текста "Wait..." и вставляем Canvas
+    // --- 1. Генерируем HTML лоадера программно ---
+    const loaderDiv = document.createElement('div');
+    loaderDiv.className = 'loader-overlay';
+    loaderDiv.innerHTML = `
+        <div style="color: #666; font-size: 0.9rem;">Loading...</div>
+        <div class="progress-bar">
+            <div class="progress-fill"></div>
+        </div>
+    `;
+
+    // Убедитесь, что очистка container.innerHTML = '' происходит ДО добавления лоадера
     container.innerHTML = '';
     container.appendChild(renderer.domElement);
+    container.appendChild(loaderDiv);
+
+    // Находим полоску, чтобы менять её ширину
+    const progressFill = loaderDiv.querySelector('.progress-fill');
 
     // --- ДОБАВЛЯЕМ УПРАВЛЕНИЕ ---
     const controls = new OrbitControls(camera, renderer.domElement);
@@ -189,11 +203,23 @@ export function loadModel(containerId, modelUrl) {
     }
 
     // 4. Загрузка модели
-    let loadedModel = null; // Создайте переменную для хранения ссылки на модель
+    let loadedModel = null;
 
-    loader.load(
-        modelUrl, // URL, который пришел из Django
-        (result) => {
+    const showError = () => {
+        if (!loaderDiv.parentNode) container.appendChild(loaderDiv);
+        loaderDiv.style.opacity = '1';
+        loaderDiv.innerHTML = `<div class="error-msg">❌ Ошибка загрузки<br><small>Проверьте файл</small></div>`;
+    };
+
+    // Сначала проверяем что файл существует, потом грузим
+    fetch(modelUrl, { method: 'HEAD' })
+        .then(res => {
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+            // Файл существует — запускаем загрузку
+            loader.load(
+                modelUrl,
+                (result) => {
             // --- SUCCESS ---
             // GLTFLoader возвращает объект с полем scene, FBXLoader — сразу группу
             loadedModel = result.scene ? result.scene : result;
@@ -231,14 +257,31 @@ export function loadModel(containerId, modelUrl) {
             fitCameraToObject(camera, loadedModel, controls);
 
             scene.add(loadedModel);
+
+            // Скрываем лоадер после загрузки
+            loaderDiv.style.opacity = '0';
+            setTimeout(() => loaderDiv.remove(), 300);
         },
-        undefined, // Progress (можно пропустить)
+        // B. ON PROGRESS (Прогресс)
+        (xhr) => {
+            // xhr.total — общий вес файла в байтах
+            // xhr.loaded — сколько скачалось
+            if (xhr.total > 0) {
+                const percent = (xhr.loaded / xhr.total) * 100;
+                progressFill.style.width = percent + '%';
+            }
+        },
+        // C. ON ERROR (Ошибка Three.js)
         (error) => {
-            // --- ERROR ---
             console.error('Ошибка загрузки:', error);
-            container.innerHTML = '❌ Error';
+            showError();
         }
-    );
+    ); // конец loader.load
+        }) // конец fetch .then
+        .catch(err => {
+            console.error('Файл недоступен:', err);
+            showError();
+        }); // конец fetch
 
     // 5. Обработка изменения размера окна
     window.addEventListener('resize', () => {
