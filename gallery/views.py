@@ -1,19 +1,51 @@
-from django.shortcuts import render
+from django.shortcuts import render, redirect
+from django.db.models import Q
+from django.utils import timezone
+from datetime import timedelta
+from django.core.paginator import Paginator
 from .models import Asset
 from .forms import AssetForm
-
-# Create your views here.
 from django.http import HttpResponse
-from django.shortcuts import redirect
 import base64
+import os
 from django.core.files.base import ContentFile
 
 def home(request):
-    import os
-    assets = Asset.objects.all().order_by('-created_at')
+    # 1. Получаем параметры из URL (GET-запроса)
+    search_query = request.GET.get('q', '')
+    ordering = request.GET.get('ordering', 'new')
+    period = request.GET.get('period', '')
 
-    # Добавляем безопасный размер файла — None если файл не существует на диске
-    for asset in assets:
+    # 2. Базовый запрос: берём ВСЕ
+    assets = Asset.objects.all()
+
+    # 3. Применяем поиск
+    if search_query:
+        assets = assets.filter(title__icontains=search_query)
+
+    # 4. Применяем фильтр по дате
+    if period == 'today':
+        assets = assets.filter(created_at__date=timezone.now().date())
+    elif period == 'week':
+        assets = assets.filter(created_at__gte=timezone.now() - timedelta(days=7))
+    elif period == 'month':
+        assets = assets.filter(created_at__gte=timezone.now() - timedelta(days=30))
+
+    # 5. Применяем сортировку
+    if ordering == 'old':
+        assets = assets.order_by('created_at')
+    elif ordering == 'name':
+        assets = assets.order_by('title')
+    else:
+        assets = assets.order_by('-created_at')
+
+    # 6. Пагинация
+    paginator = Paginator(assets, 8)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+
+    # 7. Добавляем безопасный размер файла
+    for asset in page_obj:
         try:
             asset.file_size = asset.file.size if asset.file and os.path.exists(asset.file.path) else None
         except Exception:
@@ -21,7 +53,7 @@ def home(request):
 
     context_data = {
         'page_title': 'Главная Галерея',
-        'assets': assets,
+        'page_obj': page_obj,
         'models_count': assets.count(),
     }
     return render(request, 'gallery/index.html', context_data)

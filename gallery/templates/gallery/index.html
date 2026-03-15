@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 {% load static %}
+{% load gallery_extras %}
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
@@ -26,6 +27,41 @@
     </header>
 
     <main>
+        <!-- Блок поиска и фильтров -->
+        <div class="toolbar">
+            <form action="{% url 'home' %}" method="get" style="display: flex; width: 100%; gap: 10px; align-items: center;">
+
+                <!-- 1. Поле поиска -->
+                <!-- value="{{ request.GET.q }}" — это Sticky UI.
+                     Мы оставляем текст в поле после перезагрузки страницы -->
+                <input type="text" name="q" class="search-input"
+                       placeholder="Найти 3D модель..."
+                       value="{{ request.GET.q|default:'' }}">
+
+                <!-- 2. Фильтр по дате -->
+                <select name="period" class="sort-select" onchange="this.form.submit()">
+                    <option value="" {% if not request.GET.period %}selected{% endif %}>Все время</option>
+                    <option value="today" {% if request.GET.period == 'today' %}selected{% endif %}>За сегодня</option>
+                    <option value="week" {% if request.GET.period == 'week' %}selected{% endif %}>За 7 дней</option>
+                    <option value="month" {% if request.GET.period == 'month' %}selected{% endif %}>За 30 дней</option>
+                </select>
+
+                <!-- 3. Сортировка -->
+                <select name="ordering" class="sort-select" onchange="this.form.submit()">
+                    <option value="new" {% if request.GET.ordering == 'new' %}selected{% endif %}>Сначала новые</option>
+                    <option value="old" {% if request.GET.ordering == 'old' %}selected{% endif %}>Сначала старые</option>
+                    <option value="name" {% if request.GET.ordering == 'name' %}selected{% endif %}>По имени (А-Я)</option>
+                </select>
+
+                <!-- 4. Кнопка -->
+                <button type="submit" class="search-btn">Найти</button>
+
+                <!-- 5. Кнопка сброса (если активен любой фильтр) -->
+                {% if request.GET.q or request.GET.ordering or request.GET.period %}
+                    <a href="{% url 'home' %}" class="reset-link">✕ Сбросить</a>
+                {% endif %}
+            </form>
+        </div>
         <p>Добро пожаловать в систему хранения.</p>
         <hr>
         <!-- Проверка условия -->
@@ -38,15 +74,23 @@
         <!-- контейнер сетки -->
         <div class="gallery-grid">
 
-            {% for asset in assets %}
+            {% for asset in page_obj %}
             <!-- карточка -->
             <div class="asset-card">
 
                 <!-- 1. Превью (Верхняя часть) -->
-                <div class="card-preview"
+                <div class="card-preview js-load-3d"
                      id="model-container-{{ asset.id }}"
-                     data-url="{{ asset.file.url }}">
-                    🎲
+                     data-url="{{ asset.file.url }}"
+                     {% if asset.image %}
+                         style="background-image: url('{{ asset.image.url }}');"
+                     {% endif %}
+                >
+                    {% if asset.image %}
+                        <div class="play-btn">▶</div>
+                    {% else %}
+                        <span style="font-size: 2rem;">🎲</span>
+                    {% endif %}
                 </div>
 
                 <!-- 2. Информация (Нижняя часть) -->
@@ -69,9 +113,40 @@
                 </div>
             </div>
             {% empty %}
-            <p>База пуста.</p>
+            <div style="grid-column: 1 / -1; text-align: center; padding: 40px;">
+                {% if request.GET.q %}
+                    <!-- Если был поиск -->
+                    <h3>По запросу "<b>{{ request.GET.q }}</b>" ничего не найдено 🔍</h3>
+                    <p>Попробуйте изменить запрос или <a href="{% url 'home' %}">сбросить фильтры</a>.</p>
+                {% else %}
+                    <!-- Если база реально пуста -->
+                    <h3>База пуста</h3>
+                    <p>Цыгане угнали все модели! мы уже ведем поиски</p>
+                {% endif %}
+            </div>
             {% endfor %}
 
+        </div>
+
+        <!-- 3. Блок Пагинации -->
+        <div class="pagination">
+            <span class="step-links">
+
+                {% if page_obj.has_previous %}
+                    <a href="?{% param_replace request page=1 %}">&laquo; Первая</a>
+                    <a href="?{% param_replace request page=page_obj.previous_page_number %}">Назад</a>
+                {% endif %}
+
+                <span class="current">
+                    Страница {{ page_obj.number }} из {{ page_obj.paginator.num_pages }}
+                </span>
+
+                {% if page_obj.has_next %}
+                    <a href="?{% param_replace request page=page_obj.next_page_number %}">Далее</a>
+                    <a href="?{% param_replace request page=page_obj.paginator.num_pages %}">Последняя &raquo;</a>
+                {% endif %}
+
+            </span>
         </div>
 
         <hr>
@@ -89,18 +164,30 @@
     <script type="module">
         import { loadModel } from "{% static 'gallery/js/viewer.js' %}";
 
-        // Находим все карточки с моделями
-        const containers = document.querySelectorAll('.card-preview');
+        // Находим все блоки, готовые к 3D
+        const containers = document.querySelectorAll('.js-load-3d');
 
-        // Пробегаемся по каждой
         containers.forEach(container => {
-            const id = container.id;              // Например: "model-container-5"
-            const url = container.dataset.url;    // Например: "/media/3d_assets/chair.glb"
+            // Вешаем слушатель клика на каждую карточку
+            function handleClick() {
+                // 1. Убираем кнопку Play и фоновую картинку
+                container.innerHTML = '';
+                container.style.backgroundImage = '';
 
-            // Если URL есть (файл существует) - запускаем viewer
-            if (url) {
-                loadModel(id, url);
+                // 2. Удаляем listener и cursor чтобы не мешал OrbitControls
+                container.removeEventListener('click', handleClick);
+                container.style.cursor = 'grab';
+
+                // 3. Запускаем загрузку 3D
+                const id = container.id;
+                const url = container.dataset.url;
+
+                if (url) {
+                    loadModel(id, url);
+                }
             }
+
+            container.addEventListener('click', handleClick);
         });
     </script>
 </body>

@@ -28,9 +28,13 @@ header {
 .asset-card {
     background: white;
     border-radius: 12px;
-    overflow: hidden; /* чтобы содержимое не вылезало за скругленные углы */
-    box-shadow: 0 4px 6px rgba(0,0,0,0.1); /* Лёгкая тень */
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
     transition: transform 0.2s;
+}
+
+.card-info {
+    border-radius: 0 0 12px 12px;
+    overflow: hidden;
 }
 
 .asset-card:hover {
@@ -38,8 +42,20 @@ header {
 }
 
 /* место для будущего 3D-вьювера или скриншота */
+.card-preview canvas {
+    display: block;
+    position: relative;
+    z-index: 1;
+    pointer-events: auto;
+}
+
 .card-preview {
-    position: relative; /* чтобы мы могли позиционировать загрузчик внутри */
+    position: relative;
+    cursor: pointer;
+    border-radius: 12px 12px 0 0;
+    overflow: hidden;
+    background-size: cover;
+    background-position: center;
     height: 200px;
     background-color: #e0e0e0;
     display: flex;
@@ -47,6 +63,45 @@ header {
     justify-content: center;
     color: #888;
     font-size: 3rem;
+}
+
+/* Затемнение картинки при наведении */
+.card-preview:hover::after {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.1);
+}
+
+/* Кнопка Play */
+.play-btn {
+    pointer-events: none;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%); /* Точная центровка */
+
+    width: 60px;
+    height: 60px;
+    background: rgba(0, 0, 0, 0.6);
+
+    border-radius: 50%;
+    border: 2px solid white;
+
+    color: white;
+    font-size: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    transition: transform 0.2s, background 0.2s;
+    z-index: 5; /* чтобы была поверх картинки */
+}
+
+/* Эффект нажатия */
+.card-preview:hover .play-btn {
+    background: rgba(0, 123, 255, 0.8); /* Синий при наведении */
+    transform: translate(-50%, -50%) scale(1.1);
 }
 
 /* Сам экран загрузки (поверх 3D) */
@@ -115,4 +170,79 @@ header {
 
 .btn:hover {
     background-color: #0056b3;
+}
+
+/* Панель инструментов */
+.toolbar {
+    background: white;
+    padding: 20px;
+    border-radius: 12px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    margin-bottom: 30px;
+    display: flex;
+    gap: 15px;
+    align-items: center;
+    flex-wrap: wrap; /* Чтобы на мобильном переносилось */
+}
+
+.search-input {
+    flex-grow: 1; /* Занимает все свободное место */
+    padding: 10px 15px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    font-size: 1rem;
+}
+
+.sort-select {
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    background: white;
+    cursor: pointer;
+}
+
+.search-btn {
+    padding: 10px 25px;
+    background-color: #007bff;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 1rem;
+}
+
+.search-btn:hover {
+    background-color: #0056b3;
+}
+
+.reset-link {
+    color: #dc3545;
+    text-decoration: none;
+    font-size: 0.9rem;
+}
+
+.pagination {
+    margin-top: 40px;
+    text-align: center;
+    padding: 20px;
+}
+
+.pagination a {
+    display: inline-block;
+    padding: 8px 16px;
+    margin: 0 5px;
+    background: white;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    text-decoration: none;
+    color: #333;
+}
+
+.pagination a:hover {
+    background: #f0f0f0;
+}
+
+.pagination .current {
+    font-weight: bold;
+    margin: 0 10px;
 }
