@@ -18,6 +18,18 @@
     <link rel="stylesheet" href="{% static 'gallery/style.css' %}">
 </head>
 <body>
+    <!-- Блок уведомлений -->
+    {% if messages %}
+        <div class="messages-container">
+            {% for message in messages %}
+                <!-- message.tags добавит класс 'success', 'error' или 'warning' -->
+                <div class="alert {{ message.tags }}">
+                    {{ message }}
+                </div>
+            {% endfor %}
+        </div>
+    {% endif %}
+
     <header>
         <!-- {{ ... }} — это переменная. Мы передадим её из Python -->
         <h1>{{ page_title }}</h1>

@@ -1,4 +1,5 @@
 from django.shortcuts import render, redirect
+from django.contrib import messages
 from django.db.models import Q
 from django.utils import timezone
 from datetime import timedelta
@@ -96,7 +97,8 @@ def upload(request):
             # 3. Финальное сохранение в бд
             new_asset.save()
 
-            # И перекидываем пользователя на главную
+            messages.success(request, f'Модель "{new_asset.title}" успешно загружена!')
+
             return redirect('home')
     else:
         # Сценарий: Пользователь просто зашел на страницу (GET)
